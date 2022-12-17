@@ -37,6 +37,7 @@ pub struct Includes<'a> {
     pub string: bool,
     pub type_traits: bool,
     pub utility: bool,
+    pub optional: bool,
     pub vector: bool,
     pub basetsd: bool,
     pub sys_types: bool,
@@ -98,6 +99,7 @@ pub(super) fn write(out: &mut OutFile) {
         string,
         type_traits,
         utility,
+        optional,
         vector,
         basetsd,
         sys_types,
@@ -151,6 +153,11 @@ pub(super) fn write(out: &mut OutFile) {
     }
     if utility && !cxx_header {
         writeln!(out, "#include <utility>");
+    }
+    // FIXME: this has issues
+    //#[cfg(feature = "c++17")]
+    if optional && !cxx_header {
+        writeln!(out, "#include <optional>");
     }
     if vector && !cxx_header {
         writeln!(out, "#include <vector>");

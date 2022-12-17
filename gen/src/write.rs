@@ -21,15 +21,37 @@ pub(super) fn gen(apis: &[Api], types: &Types, opt: &Opt, header: bool) -> Vec<u
     pick_includes_and_builtins(out, apis);
     out.include.extend(&opt.include);
 
+    write_content_prologue(out);
     write_forward_declarations(out, apis);
     write_data_structures(out, apis);
     write_functions(out, apis);
     write_generic_instantiations(out);
+    write_content_epilogue(out);
 
     builtin::write(out);
     include::write(out);
 
     out_file.content()
+}
+
+fn write_content_prologue(out: &mut OutFile) {
+    writeln!(out, "#ifdef __clang__");
+    writeln!(out, "#pragma clang diagnostic push");
+    writeln!(
+        out,
+        "#pragma clang diagnostic ignored \"-Wdollar-in-identifier-extension\""
+    );
+    writeln!(out, "#endif\n");
+}
+
+fn write_content_epilogue(out: &mut OutFile) {
+    // a bit of a design issue: flush is private and called implicitly in contents()
+    // so we can't flush before all content has been written, resulting in these macros
+    // being inserted before namespace end blocks (not a big deal, but)
+    //out.flush();
+    writeln!(out, "#ifdef __clang__");
+    writeln!(out, "#pragma clang diagnostic pop");
+    writeln!(out, "#endif");
 }
 
 fn write_forward_declarations(out: &mut OutFile, apis: &[Api]) {
@@ -967,14 +989,46 @@ fn write_rust_function_shim<'a>(out: &mut OutFile<'a>, efn: &'a ExternFn) {
     write_rust_function_shim_impl(out, &local_name, efn, doc, &invoke, indirect_call);
 }
 
+fn map_result_to_optional(sig: &Signature) -> bool {
+    // parse_return_type(): throws_tokens is Some(_) only when return type is Result<_>
+    // sig.throws = throw_tokens.is_some()
+
+    // FIXME: simple hack for Result<Box<T>> only
+    if sig.throws {
+        if let Some(t) = sig.ret.as_ref() {
+            match t {
+                Type::RustBox(_) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
 fn write_rust_function_shim_decl(
     out: &mut OutFile,
     local_name: &str,
     sig: &Signature,
     indirect_call: bool,
 ) {
+    let optional = map_result_to_optional(sig);
+
     begin_function_definition(out);
+
+    if optional {
+        out.include.optional = true;
+        write!(out, "std::optional<");
+    }
+
     write_return_type(out, &sig.ret);
+
+    if optional {
+        write!(out, "> ");
+    }
+
     write!(out, "{}(", local_name);
     for (i, arg) in sig.args.iter().enumerate() {
         if i > 0 {
@@ -995,7 +1049,7 @@ fn write_rust_function_shim_decl(
             write!(out, " const");
         }
     }
-    if !sig.throws {
+    if !sig.throws || optional {
         write!(out, " noexcept");
     }
 }
@@ -1124,7 +1178,8 @@ fn write_rust_function_shim_impl(
     if sig.throws {
         out.builtin.rust_error = true;
         writeln!(out, "  if (error$.ptr) {{");
-        writeln!(out, "    throw ::rust::impl<::rust::Error>::error(error$);");
+        //writeln!(out,"    // throw ::rust::impl<::rust::Error>::error(error$);");
+        writeln!(out, "    return std::nullopt;");
         writeln!(out, "  }}");
     }
     if indirect_return {
