@@ -1127,6 +1127,7 @@ fn write_rust_function_shim_impl(
             _ => {}
         }
     }
+    let optional = map_result_to_optional(sig);
     if sig.throws {
         out.builtin.ptr_len = true;
         write!(out, "::rust::repr::PtrLen error$ = ");
@@ -1178,8 +1179,11 @@ fn write_rust_function_shim_impl(
     if sig.throws {
         out.builtin.rust_error = true;
         writeln!(out, "  if (error$.ptr) {{");
-        //writeln!(out,"    // throw ::rust::impl<::rust::Error>::error(error$);");
-        writeln!(out, "    return std::nullopt;");
+        if optional {
+            writeln!(out, "    return std::nullopt;");
+        } else {
+            writeln!(out, "    throw ::rust::impl<::rust::Error>::error(error$);");
+        }
         writeln!(out, "  }}");
     }
     if indirect_return {
