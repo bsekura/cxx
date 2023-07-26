@@ -3,7 +3,7 @@ load("//tools/buck:rust_cxx_bridge.bzl", "rust_cxx_bridge")
 rust_test(
     name = "test",
     srcs = ["test.rs"],
-    edition = "2018",
+    edition = "2021",
     deps = [
         ":ffi",
         "//:cxx",
@@ -18,7 +18,7 @@ rust_library(
         "ffi/module.rs",
     ],
     crate = "cxx_test_suite",
-    edition = "2018",
+    edition = "2021",
     deps = [
         ":impl",
         "//:cxx",
@@ -33,11 +33,12 @@ cxx_library(
         ":module/source",
     ],
     exported_deps = ["//:core"],
-    exported_headers = {
-        "ffi/lib.rs.h": ":bridge/header",
-        "ffi/module.rs.h": ":module/header",
-        "ffi/tests.h": "ffi/tests.h",
-    },
+    exported_headers = [
+        ":bridge/header",
+        ":module/header",
+        "ffi/tests.h",
+    ],
+    preferred_linkage = "static",
 )
 
 rust_cxx_bridge(
